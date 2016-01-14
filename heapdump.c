@@ -1,15 +1,27 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+
 
 /*
  * This program is designed to support 32-bit dumps
  *
  */
 
+void stop_and_wait(pid_t pid){
+    int status;
 
+    kill(pid, SIGSTOP);
+    waitpid(pid, &status, 0);
+
+}
 
 
 /**************************
@@ -56,11 +68,33 @@ void parse_proc_map_heap(char * line, proc_map_heap_info * heap_struct){
     heap_struct->size = heap_struct->end_address - heap_struct->start_address;
 }
 
+void print_heap_info(proc_map_heap_info * heap_info){
+    puts(  "HEAP");
+    printf("  start-address: %x\n", heap_info->start_address);
+    printf("  end-address: %x\n", heap_info->end_address);
+    printf("  size: %x\n", heap_info->size);
+}
+
 
 /**************************
  * proc mem functions     *
  **************************/
 
+static void dump_to_file(FILE * mem_file, FILE * out_file, proc_map_heap_info * heap_info){
+    //seek to the start of the heap
+    fseek(mem_file, heap_info->start_address, SEEK_SET);
+    
+    char read_buf[1024];
+    int chunks = heap_info->size/sizeof(read_buf);
+    chunks = ((chunks%sizeof(read_buf)) == 0) ? (chunks) : (chunks +1);
+
+
+    for(int i = 0; i<chunks; i++){
+        size_t in = fread(read_buf, sizeof(read_buf), 1, mem_file);
+        fwrite(read_buf, in, 1, out_file);
+    }
+    
+}
 
 
 
@@ -85,18 +119,15 @@ int main(int argc, char * argv[]){
    
     //parse the proc maps file
     char * proc_map_heap_line = proc_map_find_heap(proc_map_file);
+    
     proc_map_heap_info heap_info;
     parse_proc_map_heap(proc_map_heap_line, &heap_info); 
+     
+    print_heap_info(&heap_info); 
     
-    
-    //start doing our memory stuff
-    
-
-    puts(  "HEAP");
-    printf("  start-address: %x\n", heap_info.start_address);
-    printf("  end-address: %x\n", heap_info.end_address);
-    printf("  size: %x\n", heap_info.size);
-
-
+    //stop the program and dump the heap
+    FILE * heap_dump_file = fopen("heapdump.bin", "w");
+    stop_and_wait((pid_t) atoi(argv[1]));
+    dump_to_file(proc_mem_file, heap_dump_file, &heap_info);    
 }
 
