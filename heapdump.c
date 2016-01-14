@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/ptrace.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,25 +16,28 @@
  *
  */
 
-void stop_and_wait(pid_t pid){
-    int status;
-
-    kill(pid, SIGSTOP);
-    waitpid(pid, &status, 0);
-
-}
-
-
-/**************************
- * proc map functions     *
- **************************/
-
 typedef struct proc_map_heap_info{
     uint32_t start_address;
     uint32_t end_address;
     uint32_t size;
 }proc_map_heap_info;
 
+
+void stop_and_wait(pid_t pid){
+    int status;
+    ptrace(PTRACE_ATTACH, pid, NULL, NULL);
+    waitpid(pid, &status, 0);
+}
+
+void countinue_stopped_process(pid_t pid){
+    int status;
+    ptrace(PTRACE_DETACH, pid, NULL, NULL);
+    waitpid(pid, &status, 0);   
+}
+
+/**************************
+ * proc map functions     *
+ **************************/
 
 //returns 1 if the given line from proc map is the heap
 static int proc_map_is_heap(char * line){
@@ -90,8 +94,8 @@ static void dump_to_file(FILE * mem_file, FILE * out_file, proc_map_heap_info * 
 
 
     for(int i = 0; i<chunks; i++){
-        size_t in = fread(read_buf, sizeof(read_buf), 1, mem_file);
-        fwrite(read_buf, in, 1, out_file);
+        size_t in = fread(read_buf, 1, sizeof(read_buf), mem_file);
+        fwrite(read_buf, 1, in, out_file);
     }
     
 }
@@ -128,6 +132,7 @@ int main(int argc, char * argv[]){
     //stop the program and dump the heap
     FILE * heap_dump_file = fopen("heapdump.bin", "w");
     stop_and_wait((pid_t) atoi(argv[1]));
-    dump_to_file(proc_mem_file, heap_dump_file, &heap_info);    
+    dump_to_file(proc_mem_file, heap_dump_file, &heap_info);
+    countinue_stopped_process((pid_t) atoi(argv[1]));
 }
 
