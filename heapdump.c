@@ -10,6 +10,7 @@
 #include <string.h>
 #include <signal.h>
 
+#include <openssl/md5.h>
 
 /*
  * This program is designed to support 32-bit dumps
@@ -22,14 +23,68 @@ typedef struct proc_map_heap_info{
     uint32_t size;
 }proc_map_heap_info;
 
+typedef struct hash_tree_node{
+    uint8_t hash[16];
+    struct hash_tree_node * left;
+    struct hash_tree_node * right;
+}hash_tree_node;
 
-void stop_and_wait(pid_t pid){
+
+/**************************
+ * hash_tree functions    *
+ **************************/
+
+// The hash tree has the following structure
+//
+// hash[offset, size]
+//
+//            hash[0,length]
+//       ___________|____________
+//      |                        |
+//  hash[0, length/2]         hash[offset/2, length/2]
+//
+
+
+//n_tree_leaves must be a factor of 2^k
+static hash_tree_node * generate_hash_tree(FILE * heap, hash_tree_node * root, size_t chunk_size, size_t current_offset, size_t height){
+    
+    //if we have hit the max height of our tree, return a NULL pointer 
+    if(height == 0){
+        return NULL;
+    }
+
+    hash_tree_node * tree_node = malloc(sizeof(struct hash_tree_node));
+    
+    tree_node->left  = generate_hash_tree(heap, root->left, chunk_size/2, current_offset, height-1);
+    tree_node->right = generate_hash_tree(heap, root->right, chunk_size/2, current_offset + (chunk_size/2), height-1);
+    
+    //read in a chunk
+    fseek(heap, current_offset, SEEK_SET);
+    uint8_t * chunk = malloc(chunk_size);
+    fread(chunk, 1, chunk_size, heap);
+    
+    //hash chunk (we will update everything at once rather than in pieces)
+    MD5_CTX md5_context;
+    MD5_Init(&md5_context);
+    MD5_Update(&md5_context, chunk, chunk_size);
+    MD5_Final(tree_node->hash, &md5_context);
+    
+    return tree_node;
+}
+
+
+
+/**************************
+ * start/stop functions   *
+ **************************/
+
+static void stop_and_wait(pid_t pid){
     int status;
     ptrace(PTRACE_ATTACH, pid, NULL, NULL);
     waitpid(pid, &status, 0);
 }
 
-void countinue_stopped_process(pid_t pid){
+static void countinue_stopped_process(pid_t pid){
     int status;
     ptrace(PTRACE_DETACH, pid, NULL, NULL);
     waitpid(pid, &status, 0);   
@@ -67,12 +122,12 @@ static char * proc_map_find_heap(FILE * file){
 }
 
 //loads the values in the procmap line into a proc_map_heap_info struct
-void parse_proc_map_heap(char * line, proc_map_heap_info * heap_struct){
+static void parse_proc_map_heap(char * line, proc_map_heap_info * heap_struct){
     sscanf(line, "%x-%x", &heap_struct->start_address, &heap_struct->end_address);
     heap_struct->size = heap_struct->end_address - heap_struct->start_address;
 }
 
-void print_heap_info(proc_map_heap_info * heap_info){
+static void print_heap_info(proc_map_heap_info * heap_info){
     puts(  "HEAP");
     printf("  start-address: %x\n", heap_info->start_address);
     printf("  end-address: %x\n", heap_info->end_address);

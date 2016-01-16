@@ -1,9 +1,10 @@
 CC=gcc
 CFLAGS=-Wall -std=c99
 SOURCES=heapdump.c
+LIB=-lssl -lcrypto
 
 all:
-	$(CC) $(CFLAGS) $(SOURCES) -o heapdump
+	$(CC) $(CFLAGS) $(SOURCES) $(LIB) -o heapdump
 clean:
 	rm heapdump
 install:
