@@ -14,7 +14,7 @@ int main(){
     puts(string);
 
     getchar();
-    char * string_2 = "FUCK STRINGS AND 3 CHARACTERS"; 
+    char * string_2 = "goodbye world"; 
     char * string_copy_2 = strdup(string_2);
     puts(string_2);
 
