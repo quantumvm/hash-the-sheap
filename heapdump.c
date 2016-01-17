@@ -73,9 +73,18 @@ static hash_tree_node * generate_hash_tree(FILE * heap, size_t chunk_size, size_
     return root;
 }
 
-//static hash_tree_node * copy_hash_tree(hash_tree_node * root){
-//    temp = malloc
-//}
+static hash_tree_node * copy_hash_tree(hash_tree_node * root){
+    if(root == NULL){
+        return NULL;
+    }
+    
+    hash_tree_node * temp = malloc(sizeof(struct hash_tree_node));
+    memcpy(temp, root, sizeof(struct hash_tree_node));
+    temp->left =copy_hash_tree(root->left);
+    temp->right = copy_hash_tree(root->right);
+
+    return temp;
+}
 
 
 static char * hash_to_string(unsigned char * hash){
@@ -222,14 +231,18 @@ int main(int argc, char * argv[]){
     hash_tree_root = generate_hash_tree(proc_mem_file, heap_info.size, heap_info.start_address, 8);
     countinue_stopped_process((pid_t) atoi(argv[1]));
     
+    hash_tree_node * hash_tree_copy= copy_hash_tree(hash_tree_root);
+    puts("COPY~~~~~~~~");
+    print_hash_tree(hash_tree_copy, 0);
+    puts("ORIGINAL~~~~");
     print_hash_tree(hash_tree_root, 0);
     
     //stop the program and dump the heap
     
-    FILE * heap_dump_file = fopen("heapdump.bin", "w");
+    /*FILE * heap_dump_file = fopen("heapdump.bin", "w");
     stop_and_wait((pid_t) atoi(argv[1]));
     dump_to_file(proc_mem_file, heap_dump_file, &heap_info);
     countinue_stopped_process((pid_t) atoi(argv[1]));
-    
+    */
 }
 
