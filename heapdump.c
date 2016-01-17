@@ -44,7 +44,6 @@ typedef struct hash_tree_node{
 //  hash[0, length/2]         hash[offset/2, length/2]
 //
 
-
 //n_tree_leaves must be a factor of 2^k
 static hash_tree_node * generate_hash_tree(FILE * heap, hash_tree_node * root, size_t chunk_size, size_t current_offset, size_t height){
     
@@ -53,12 +52,13 @@ static hash_tree_node * generate_hash_tree(FILE * heap, hash_tree_node * root, s
         return NULL;
     }
 
-    hash_tree_node * tree_node = malloc(sizeof(struct hash_tree_node));
+    root = malloc(sizeof(struct hash_tree_node));
     
-    tree_node->left  = generate_hash_tree(heap, root->left, chunk_size/2, current_offset, height-1);
-    tree_node->right = generate_hash_tree(heap, root->right, chunk_size/2, current_offset + (chunk_size/2), height-1);
+    root->left  = generate_hash_tree(heap, root->left, chunk_size/2, current_offset, height-1);
+    root->right = generate_hash_tree(heap, root->right, chunk_size/2, current_offset + (chunk_size/2), height-1);
     
     //read in a chunk
+    printf("offset %d, size %d, heght %d\n", current_offset, chunk_size, height);
     fseek(heap, current_offset, SEEK_SET);
     uint8_t * chunk = malloc(chunk_size);
     fread(chunk, 1, chunk_size, heap);
@@ -67,12 +67,40 @@ static hash_tree_node * generate_hash_tree(FILE * heap, hash_tree_node * root, s
     MD5_CTX md5_context;
     MD5_Init(&md5_context);
     MD5_Update(&md5_context, chunk, chunk_size);
-    MD5_Final(tree_node->hash, &md5_context);
+    MD5_Final(root->hash, &md5_context);
     
-    return tree_node;
+    free(chunk);
+
+    return root;
+}
+
+static char * hash_to_string(unsigned char * hash){
+    char * hash_string = calloc(1,32+1);
+
+    for(int i=0; i<16;i++){
+        sprintf(&hash_string[i*2], "%02x", hash[i]);
+    }
+
+    hash_string[32] = '\x00';
+                    
+    return hash_string;
 }
 
 
+//preorder tree traversal and printing
+void print_hash_tree(hash_tree_node * root, int n){
+    if(root == NULL){
+        return;
+    }
+    
+    char * hash = hash_to_string(root->hash);
+    printf("hash %s, height %d\n", hash, n);
+    free(hash);
+
+    print_hash_tree(root->left, n+1);
+    print_hash_tree(root->right, n+1);
+     
+}
 
 /**************************
  * start/stop functions   *
@@ -180,14 +208,24 @@ int main(int argc, char * argv[]){
     char * proc_map_heap_line = proc_map_find_heap(proc_map_file);
     
     proc_map_heap_info heap_info;
-    parse_proc_map_heap(proc_map_heap_line, &heap_info); 
-     
+    parse_proc_map_heap(proc_map_heap_line, &heap_info);  
     print_heap_info(&heap_info); 
     
+    //create a hash tree
+
+    stop_and_wait((pid_t) atoi(argv[1]));
+    hash_tree_node * hash_tree_root = NULL; 
+    hash_tree_root = generate_hash_tree(proc_mem_file, hash_tree_root, heap_info.size, 0, 2);
+    countinue_stopped_process((pid_t) atoi(argv[1]));
+    
+    print_hash_tree(hash_tree_root, 0);
+    
     //stop the program and dump the heap
+    
     FILE * heap_dump_file = fopen("heapdump.bin", "w");
     stop_and_wait((pid_t) atoi(argv[1]));
     dump_to_file(proc_mem_file, heap_dump_file, &heap_info);
     countinue_stopped_process((pid_t) atoi(argv[1]));
+    
 }
 

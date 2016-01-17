@@ -4,11 +4,19 @@
 #include <stdio.h>
 
 int main(){
-    char * string = "hello world"; 
-    char * string_copy = strdup(string);
-    
+   
     printf("My pid is %d", (int) getpid());
     fflush(stdout);
+    
+    getchar();
+    char * string = "hello world"; 
+    char * string_copy = strdup(string);
+    puts(string);
+
+    getchar();
+    char * string_2 = "FUCK STRINGS AND 3 CHARACTERS"; 
+    char * string_copy_2 = strdup(string_2);
+    puts(string_2);
 
     while(1){
         sleep(1);
