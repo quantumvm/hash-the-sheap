@@ -58,7 +58,6 @@ static hash_tree_node * generate_hash_tree(FILE * heap, hash_tree_node * root, s
     root->right = generate_hash_tree(heap, root->right, chunk_size/2, current_offset + (chunk_size/2), height-1);
     
     //read in a chunk
-    printf("offset %d, size %d, heght %d\n", current_offset, chunk_size, height);
     fseek(heap, current_offset, SEEK_SET);
     uint8_t * chunk = malloc(chunk_size);
     fread(chunk, 1, chunk_size, heap);
@@ -215,7 +214,7 @@ int main(int argc, char * argv[]){
 
     stop_and_wait((pid_t) atoi(argv[1]));
     hash_tree_node * hash_tree_root = NULL; 
-    hash_tree_root = generate_hash_tree(proc_mem_file, hash_tree_root, heap_info.size, 0, 2);
+    hash_tree_root = generate_hash_tree(proc_mem_file, hash_tree_root, heap_info.size, heap_info.start_address, 2);
     countinue_stopped_process((pid_t) atoi(argv[1]));
     
     print_hash_tree(hash_tree_root, 0);
