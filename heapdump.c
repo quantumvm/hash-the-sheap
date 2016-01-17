@@ -34,28 +34,28 @@ typedef struct hash_tree_node{
  * hash_tree functions    *
  **************************/
 
-// The hash tree has the following structure
+// The hash tree has the following structure 
 //
 // hash[offset, size]
 //
-//            hash[0,length]
+//            hash[offset, length]
 //       ___________|____________
 //      |                        |
-//  hash[0, length/2]         hash[offset/2, length/2]
+//  hash[offset, length/2]     hash[offset + length/2, length/2]
 //
 
-//n_tree_leaves must be a factor of 2^k
-static hash_tree_node * generate_hash_tree(FILE * heap, hash_tree_node * root, size_t chunk_size, size_t current_offset, size_t height){
+//Returns a tree of hashes of the heap memory of height [height]
+static hash_tree_node * generate_hash_tree(FILE * heap, size_t chunk_size, size_t current_offset, size_t height){
     
     //if we have hit the max height of our tree, return a NULL pointer 
     if(height == 0){
         return NULL;
     }
 
-    root = malloc(sizeof(struct hash_tree_node));
+    hash_tree_node * root = malloc(sizeof(struct hash_tree_node));
     
-    root->left  = generate_hash_tree(heap, root->left, chunk_size/2, current_offset, height-1);
-    root->right = generate_hash_tree(heap, root->right, chunk_size/2, current_offset + (chunk_size/2), height-1);
+    root->left  = generate_hash_tree(heap, chunk_size/2, current_offset, height-1);
+    root->right = generate_hash_tree(heap, chunk_size/2, current_offset + (chunk_size/2), height-1);
     
     //read in a chunk
     fseek(heap, current_offset, SEEK_SET);
@@ -72,6 +72,11 @@ static hash_tree_node * generate_hash_tree(FILE * heap, hash_tree_node * root, s
 
     return root;
 }
+
+//static hash_tree_node * copy_hash_tree(hash_tree_node * root){
+//    temp = malloc
+//}
+
 
 static char * hash_to_string(unsigned char * hash){
     char * hash_string = calloc(1,32+1);
@@ -214,7 +219,7 @@ int main(int argc, char * argv[]){
 
     stop_and_wait((pid_t) atoi(argv[1]));
     hash_tree_node * hash_tree_root = NULL; 
-    hash_tree_root = generate_hash_tree(proc_mem_file, hash_tree_root, heap_info.size, heap_info.start_address, 2);
+    hash_tree_root = generate_hash_tree(proc_mem_file, heap_info.size, heap_info.start_address, 8);
     countinue_stopped_process((pid_t) atoi(argv[1]));
     
     print_hash_tree(hash_tree_root, 0);
