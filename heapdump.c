@@ -17,6 +17,13 @@
  *
  */
 
+typedef struct flags{
+    pid_t process;
+    char * dump_file_name;
+    int build_heap_tree;
+    size_t heap_tree_height;
+}flags;
+
 typedef struct proc_map_heap_info{
     uint32_t start_address;
     uint32_t end_address;
@@ -85,7 +92,6 @@ static hash_tree_node * copy_hash_tree(hash_tree_node * root){
 
     return temp;
 }
-
 
 static char * hash_to_string(unsigned char * hash){
     char * hash_string = calloc(1,32+1);
@@ -197,52 +203,101 @@ static void dump_to_file(FILE * mem_file, FILE * out_file, proc_map_heap_info * 
 }
 
 
+/**************************
+ * command line functions *
+ **************************/
+static void print_help(){
+    puts("hashthesheap [ options ]");
+    puts("  -p pid      - Process to analyze");
+    puts("  -t          - Build hash tree");
+    puts("  -i int      - Set hash tree height (defaults to 8 if left blank)");
+    puts("  -d file     - Dump heap to file ");
+    puts("  -h          - Print help screen");   
+}
 
 int main(int argc, char * argv[]){
-    if(argc < 2){
-        printf("USE: %s pid\n", argv[0]);
-        exit(0);
-    }
     
     if(geteuid() != 0){
         fprintf(stderr, "This program requires root.\n");
         exit(1);
     }
     
+    flags f = {0};
+    f.heap_tree_height = 8;
+
+    int opt;
+    while((opt = getopt(argc, argv, "p:ti:d:h")) != -1){
+        switch(opt){
+            case 'p':
+                f.process = (pid_t) atoi(optarg);
+                break;
+            case 't':
+                f.build_heap_tree = 1;
+                break;
+            case 'i':
+                f.heap_tree_height = (size_t) atoi(optarg);
+                break;
+            case 'd':
+                f.dump_file_name = optarg;
+                break;
+            case 'h':
+                print_help();
+                exit(0);
+                break;
+            default:
+                print_help();
+                exit(0);
+
+        }
+    }
+    
+    if(optind == 1){
+        print_help();
+        exit(0);
+    }
+
+    if(f.process == 0){
+        puts("Missing option -p (process ID)");
+        exit(1);
+    }
+    
+    
+
+    //get maps and mem files from /proc
     char * proc_map_path;
     char * proc_mem_path;
-    asprintf(&proc_map_path, "/proc/%s/maps", argv[1]);
-    asprintf(&proc_mem_path, "/proc/%s/mem" , argv[1]);
-    
+    asprintf(&proc_map_path, "/proc/%d/maps", f.process);
+    asprintf(&proc_mem_path, "/proc/%d/mem" , f.process); 
     FILE * proc_map_file = fopen(proc_map_path, "r");
     FILE * proc_mem_file = fopen(proc_mem_path, "r");
    
     //parse the proc maps file
     char * proc_map_heap_line = proc_map_find_heap(proc_map_file);
-    
+
     proc_map_heap_info heap_info;
     parse_proc_map_heap(proc_map_heap_line, &heap_info);  
     print_heap_info(&heap_info); 
     
-    //create a hash tree
+    //create a hash tree 
+    if(f.build_heap_tree == 1){
+        stop_and_wait((pid_t) atoi(argv[1]));
+        hash_tree_node * hash_tree_root = NULL; 
+        hash_tree_root = generate_hash_tree( proc_mem_file, 
+                                             heap_info.size, 
+                                             heap_info.start_address,
+                                             f.heap_tree_height);
+        
+        countinue_stopped_process((pid_t) atoi(argv[1]));
+        print_hash_tree(hash_tree_root, 0);
+    }        
+    
+    if(f.dump_file_name != NULL){ 
+        FILE * heap_dump_file = fopen(f.dump_file_name, "w");
+        stop_and_wait((pid_t) atoi(argv[1]));
+        dump_to_file(proc_mem_file, heap_dump_file, &heap_info);
+        countinue_stopped_process((pid_t) atoi(argv[1]));     
+    }
 
-    stop_and_wait((pid_t) atoi(argv[1]));
-    hash_tree_node * hash_tree_root = NULL; 
-    hash_tree_root = generate_hash_tree(proc_mem_file, heap_info.size, heap_info.start_address, 8);
-    countinue_stopped_process((pid_t) atoi(argv[1]));
-    
-    hash_tree_node * hash_tree_copy= copy_hash_tree(hash_tree_root);
-    puts("COPY~~~~~~~~");
-    print_hash_tree(hash_tree_copy, 0);
-    puts("ORIGINAL~~~~");
-    print_hash_tree(hash_tree_root, 0);
-    
-    //stop the program and dump the heap
-    
-    /*FILE * heap_dump_file = fopen("heapdump.bin", "w");
-    stop_and_wait((pid_t) atoi(argv[1]));
-    dump_to_file(proc_mem_file, heap_dump_file, &heap_info);
-    countinue_stopped_process((pid_t) atoi(argv[1]));
-    */
+    return 0;
 }
 
