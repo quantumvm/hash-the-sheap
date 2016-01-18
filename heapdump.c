@@ -78,7 +78,6 @@ static hash_tree_node * generate_hash_tree(uint8_t * heap, size_t chunk_size, si
     
     //read in a chunk
     char * chunk = malloc(chunk_size);
-    char buffer[chunk_size];
     memcpy(chunk, heap + current_offset, chunk_size);
 
     //hash chunk (we will update everything at once rather than in pieces)
@@ -96,7 +95,6 @@ static uint8_t * load_heap_from_file(FILE * heap, size_t heap_start, size_t size
     fseek(heap, heap_start, SEEK_SET);
     uint8_t * chunk = malloc(size);
     fread(chunk, 1, size, heap);
-    printf("chunk at %x\n", chunk);
     return chunk;
 }
 
@@ -159,17 +157,23 @@ static void free_hash_tree_branch(hash_tree_node * root){
 //tree thats the same terminate that entire branch. Otherwise keep traversing
 //until we hit a NULL terminated branch
 
-static void diff_hash_tree(hash_tree_node * first_snapshot, hash_tree_node * second_snapshot){
+static int diff_hash_tree(hash_tree_node * first_snapshot, hash_tree_node * second_snapshot){
     if((first_snapshot == NULL) || (second_snapshot == NULL)){
-        return;
+        return 0;
     }
     
     if(memcmp(first_snapshot->hash, second_snapshot->hash, 16) == 0){
         free_hash_tree_branch(second_snapshot);
+        return 1;
     }
     
-    diff_hash_tree(first_snapshot->left, second_snapshot->left);
-    diff_hash_tree(first_snapshot->right, second_snapshot->right);
+    if(diff_hash_tree(first_snapshot->left, second_snapshot->left) == 1){
+        second_snapshot->left = NULL;
+    }
+    if(diff_hash_tree(first_snapshot->right, second_snapshot->right) == 1){
+        second_snapshot->right = NULL;
+    }
+    return 0;
 }
 
 
@@ -397,12 +401,21 @@ int main(int argc, char * argv[]){
         free(second_chunk);
         second_chunk = NULL;
         
-        //diff the hash trees and print the solution
-        //diff_hash_tree(first_hash_tree, second_hash_tree);
+        puts("FIRST");
+        print_hash_tree(first_hash_tree,0);
         
-        print_hash_tree(first_hash_tree, 0);
-        //print_hash_tree(second_hash_tree, 0);
-        puts("All done for now!");
+        puts("SECOND"); 
+        print_hash_tree(second_hash_tree,0);
+
+        //diff the hash trees and print the solution
+        if(diff_hash_tree(first_hash_tree, second_hash_tree)!=1){            
+            //print_hash_tree(first_hash_tree, 0);
+            puts("DIFF");
+            print_hash_tree(second_hash_tree, 0);
+        }else{
+            second_hash_tree = NULL;
+            puts("SAME TREE!!!");
+        }
     }        
     
     //dump a single heap snapshot to a file
