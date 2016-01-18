@@ -401,16 +401,16 @@ int main(int argc, char * argv[]){
         free(second_chunk);
         second_chunk = NULL;
         
-        puts("FIRST");
+        printf("\n%sFIRST%s\n", YELLOW, NO_COLOR);
         print_hash_tree(first_hash_tree,0);
         
-        puts("SECOND"); 
+        printf("\n%sSECOND%s\n", YELLOW, NO_COLOR);
         print_hash_tree(second_hash_tree,0);
 
         //diff the hash trees and print the solution
         if(diff_hash_tree(first_hash_tree, second_hash_tree)!=1){            
             //print_hash_tree(first_hash_tree, 0);
-            puts("DIFF");
+            printf("\n%sTHIRD%s\n", YELLOW, NO_COLOR);
             print_hash_tree(second_hash_tree, 0);
         }else{
             second_hash_tree = NULL;
