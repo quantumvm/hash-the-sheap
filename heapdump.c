@@ -12,6 +12,16 @@
 
 #include <openssl/md5.h>
 
+#define NO_COLOR    "\x1B[0m"
+#define RED         "\x1B[31m"
+#define GREEN       "\x1B[32m"
+#define YELLOW      "\x1B[33m"
+#define BLUE        "\x1B[34m"
+#define MAGINTA     "\x1B[35m"
+#define CYAN        "\x1B[36m"
+#define WHTITE      "\x1B[37m"
+
+
 /*
  * This program is designed to support 32-bit dumps
  *
@@ -52,8 +62,8 @@ typedef struct hash_tree_node{
 //
 
 //Returns a tree of hashes of the heap memory of height [height]
-static hash_tree_node * generate_hash_tree(FILE * heap, size_t chunk_size, size_t current_offset, size_t height){
-    
+static hash_tree_node * generate_hash_tree(uint8_t * heap, size_t chunk_size, size_t current_offset, size_t height){
+
     //if we have hit the max height of our tree, return a NULL pointer 
     if(height == 0){
         return NULL;
@@ -61,14 +71,16 @@ static hash_tree_node * generate_hash_tree(FILE * heap, size_t chunk_size, size_
 
     hash_tree_node * root = malloc(sizeof(struct hash_tree_node));
     
+    //puts("going left");
     root->left  = generate_hash_tree(heap, chunk_size/2, current_offset, height-1);
+    //puts("going right");
     root->right = generate_hash_tree(heap, chunk_size/2, current_offset + (chunk_size/2), height-1);
     
     //read in a chunk
-    fseek(heap, current_offset, SEEK_SET);
-    uint8_t * chunk = malloc(chunk_size);
-    fread(chunk, 1, chunk_size, heap);
-    
+    char * chunk = malloc(chunk_size);
+    char buffer[chunk_size];
+    memcpy(chunk, heap + current_offset, chunk_size);
+
     //hash chunk (we will update everything at once rather than in pieces)
     MD5_CTX md5_context;
     MD5_Init(&md5_context);
@@ -76,8 +88,16 @@ static hash_tree_node * generate_hash_tree(FILE * heap, size_t chunk_size, size_
     MD5_Final(root->hash, &md5_context);
     
     free(chunk);
-
+    
     return root;
+}
+
+static uint8_t * load_heap_from_file(FILE * heap, size_t heap_start, size_t size){
+    fseek(heap, heap_start, SEEK_SET);
+    uint8_t * chunk = malloc(size);
+    fread(chunk, 1, size, heap);
+    printf("chunk at %x\n", chunk);
+    return chunk;
 }
 
 static hash_tree_node * copy_hash_tree(hash_tree_node * root){
@@ -107,7 +127,7 @@ static char * hash_to_string(unsigned char * hash){
 
 
 //preorder tree traversal and printing
-void print_hash_tree(hash_tree_node * root, int n){
+static void print_hash_tree(hash_tree_node * root, int n){
     if(root == NULL){
         return;
     }
@@ -120,6 +140,38 @@ void print_hash_tree(hash_tree_node * root, int n){
     print_hash_tree(root->right, n+1);
      
 }
+
+static void free_hash_tree_branch(hash_tree_node * root){
+    if(root == NULL){
+        return;
+    }
+    
+    free_hash_tree_branch(root->left);
+    free_hash_tree_branch(root->right);
+    
+    root->left = NULL;
+    root->right = NULL;
+    free(root);
+}
+
+//This is the next "major function" it traverses the existing hash tree
+//and verfies that the hashes still match. If we encounter hash in the
+//tree thats the same terminate that entire branch. Otherwise keep traversing
+//until we hit a NULL terminated branch
+
+static void diff_hash_tree(hash_tree_node * first_snapshot, hash_tree_node * second_snapshot){
+    if((first_snapshot == NULL) || (second_snapshot == NULL)){
+        return;
+    }
+    
+    if(memcmp(first_snapshot->hash, second_snapshot->hash, 16) == 0){
+        free_hash_tree_branch(second_snapshot);
+    }
+    
+    diff_hash_tree(first_snapshot->left, second_snapshot->left);
+    diff_hash_tree(first_snapshot->right, second_snapshot->right);
+}
+
 
 /**************************
  * start/stop functions   *
@@ -154,6 +206,8 @@ static int proc_map_is_heap(char * line){
 static char * proc_map_find_heap(FILE * file){
     char * line = NULL;
     size_t n = 0;
+    
+    fseek(file, 0, SEEK_SET);
 
     while(getline(&line, &n, file) != -1){
         if(proc_map_is_heap(line)){
@@ -175,7 +229,6 @@ static void parse_proc_map_heap(char * line, proc_map_heap_info * heap_struct){
 }
 
 static void print_heap_info(proc_map_heap_info * heap_info){
-    puts(  "HEAP");
     printf("  start-address: %x\n", heap_info->start_address);
     printf("  end-address: %x\n", heap_info->end_address);
     printf("  size: %x\n", heap_info->size);
@@ -211,7 +264,7 @@ static void print_help(){
     puts("  -p pid      - Process to analyze");
     puts("  -t          - Build hash tree");
     puts("  -i int      - Set hash tree height (defaults to 8 if left blank)");
-    puts("  -d file     - Dump heap to file ");
+    puts("  -d file     - Take a single snapshot of the heap and dump to a file");
     puts("  -h          - Print help screen");   
 }
 
@@ -261,7 +314,6 @@ int main(int argc, char * argv[]){
         exit(1);
     }
     
-    
 
     //get maps and mem files from /proc
     char * proc_map_path;
@@ -271,31 +323,98 @@ int main(int argc, char * argv[]){
     FILE * proc_map_file = fopen(proc_map_path, "r");
     FILE * proc_mem_file = fopen(proc_mem_path, "r");
    
-    //parse the proc maps file
-    char * proc_map_heap_line = proc_map_find_heap(proc_map_file);
-
-    proc_map_heap_info heap_info;
-    parse_proc_map_heap(proc_map_heap_line, &heap_info);  
-    print_heap_info(&heap_info); 
     
-    //create a hash tree 
+    //hash tree section 
     if(f.build_heap_tree == 1){
-        stop_and_wait((pid_t) atoi(argv[1]));
-        hash_tree_node * hash_tree_root = NULL; 
-        hash_tree_root = generate_hash_tree( proc_mem_file, 
-                                             heap_info.size, 
-                                             heap_info.start_address,
-                                             f.heap_tree_height);
+        char * proc_map_heap_line;
         
-        countinue_stopped_process((pid_t) atoi(argv[1]));
-        print_hash_tree(hash_tree_root, 0);
+        hash_tree_node * first_hash_tree  = NULL;
+        hash_tree_node * second_hash_tree = NULL;
+        proc_map_heap_info heap_info_first  ={0};
+        proc_map_heap_info heap_info_second ={0};
+        uint8_t * first_chunk = NULL;
+        uint8_t * second_chunk = NULL;
+
+        //take the first snapshot of the process
+        stop_and_wait(f.process);
+            fflush(proc_map_file);
+            proc_map_heap_line = proc_map_find_heap(proc_map_file);
+            parse_proc_map_heap(proc_map_heap_line, &heap_info_first);
+            first_chunk = load_heap_from_file(proc_mem_file, heap_info_first.start_address, heap_info_first.size);
+            
+            printf("%sSnapshot 1:%s\n", RED, NO_COLOR);
+            print_heap_info(&heap_info_first);
+            
+            //unless we close the files we will get old data (there's probably a better solution to this)
+            fclose(proc_mem_file);
+            fclose(proc_map_file);
+            free(proc_map_heap_line);
+            proc_map_heap_line = NULL;
+        countinue_stopped_process(f.process);
+        
+        //prompt user for second snapshot
+        printf("\n%sPress enter to take second snapshot.%s\n", GREEN, NO_COLOR);
+        getchar();
+
+        //take the second snapshot of the process
+        proc_map_file = fopen(proc_map_path, "r");
+        proc_mem_file = fopen(proc_mem_path, "r");
+        stop_and_wait(f.process);
+            proc_map_heap_line = proc_map_find_heap(proc_map_file);
+            parse_proc_map_heap(proc_map_heap_line, &heap_info_second);
+            second_chunk = load_heap_from_file(proc_mem_file,heap_info_second.start_address, heap_info_second.size);
+
+            printf("%sSnapshot 2:%s\n", RED, NO_COLOR);
+            print_heap_info(&heap_info_second);
+            
+            free(proc_map_heap_line);
+            proc_map_heap_line = NULL;
+        countinue_stopped_process(f.process);       
+        
+        //If the first snapshot used less memory than the first resize the first chunk
+        //so our hashing algorythem still works. The else if probably won't happen.
+        if(heap_info_second.size > heap_info_first.size){
+            heap_info_first.size = heap_info_second.size;
+            first_chunk = realloc(first_chunk, heap_info_second.size);
+        }
+        else if(heap_info_second.size < heap_info_first.size){
+            heap_info_second.size = heap_info_first.size;
+            second_chunk = realloc(second_chunk, heap_info_first.size);
+        }
+        
+        //generate the hash_trees
+        first_hash_tree = generate_hash_tree(first_chunk, 
+                                             heap_info_first.size, 
+                                             0,
+                                             f.heap_tree_height);
+        free(first_chunk);
+        first_chunk = NULL;
+
+        second_hash_tree = generate_hash_tree(second_chunk, 
+                                              heap_info_second.size, 
+                                              0,
+                                              f.heap_tree_height);
+        free(second_chunk);
+        second_chunk = NULL;
+        
+        //diff the hash trees and print the solution
+        //diff_hash_tree(first_hash_tree, second_hash_tree);
+        
+        print_hash_tree(first_hash_tree, 0);
+        //print_hash_tree(second_hash_tree, 0);
+        puts("All done for now!");
     }        
     
+    //dump a single heap snapshot to a file
     if(f.dump_file_name != NULL){ 
+        proc_map_heap_info heap_info = {0};
+        char * proc_map_heap_line = proc_map_find_heap(proc_map_file);
+        parse_proc_map_heap(proc_map_heap_line, &heap_info);
+        
         FILE * heap_dump_file = fopen(f.dump_file_name, "w");
-        stop_and_wait((pid_t) atoi(argv[1]));
+        stop_and_wait(f.process);
         dump_to_file(proc_mem_file, heap_dump_file, &heap_info);
-        countinue_stopped_process((pid_t) atoi(argv[1]));     
+        countinue_stopped_process(f.process);     
     }
 
     return 0;
