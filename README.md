@@ -17,7 +17,8 @@ hashthesheap [ options ]
   -v          - verbose mode (prints hash tree)
 ```
 ###Example
-
+The following is an example of using hashthesheap to look at the heap of the popular irc client "irssi" before and after it has made a connection to freenode.
+  
 Find a process to dump
 ```
 $ ps -aux
@@ -27,4 +28,4 @@ thephan+  5405  0.0  0.0  15936   940 pts/1    S+   00:13   0:00 grep --color=au
 ```
 
 Dump the process
-
+![hashthesheap](https://cloud.githubusercontent.com/assets/1786880/12410861/0fb72ed2-be47-11e5-8bec-49ddd57960d7.png)
