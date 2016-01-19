@@ -1,10 +1,15 @@
 CC=gcc
 CFLAGS=-Wall -std=c99
-SOURCES=hashthesheap.c
-LIB=-lssl -lcrypto
+
+SOURCES=hashthesheap.c interface.c
+
+CAIRO=$(shell pkg-config cairo --libs --cflags)
+GTK3 =$(shell pkg-config gtk+-3.0 --libs --cflags)
+
+LIBS =-lssl -lcrypto $(CAIRO) $(GTK3)
 
 all:
-	$(CC) $(CFLAGS) $(SOURCES) $(LIB) -o hashthesheap
+	$(CC) $(CFLAGS) $(SOURCES) $(LIBS) -o hashthesheap
 clean:
 	rm hashthesheap
 install:

@@ -12,6 +12,8 @@
 
 #include <openssl/md5.h>
 
+#include "interface.h"
+
 #define NO_COLOR    "\x1B[0m"
 #define RED         "\x1B[31m"
 #define GREEN       "\x1B[32m"
@@ -406,7 +408,8 @@ int main(int argc, char * argv[]){
         free(second_chunk);
         second_chunk = NULL;
         
-
+        
+        //handle verbose hash printing
         if(f.verbose){
             printf("\n%sFIRST%s\n", YELLOW, NO_COLOR);
             print_hash_tree(first_hash_tree,0);
@@ -416,7 +419,6 @@ int main(int argc, char * argv[]){
 
             //diff the hash trees and print the solution
             if(diff_hash_tree(first_hash_tree, second_hash_tree)!=1){            
-                //print_hash_tree(first_hash_tree, 0);
                 printf("\n%sDIFF%s\n", YELLOW, NO_COLOR);
                 print_hash_tree(second_hash_tree, 0);
             }else{
@@ -424,6 +426,10 @@ int main(int argc, char * argv[]){
                 puts("SAME TREE!!!");
             }
         }
+
+        //start visualization
+        draw_heap_visualization();
+
     }        
     
     //dump a single heap snapshot to a file
