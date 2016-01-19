@@ -12,6 +12,7 @@
 
 #include <openssl/md5.h>
 
+#include "hashthesheap.h"
 #include "interface.h"
 
 #define NO_COLOR    "\x1B[0m"
@@ -29,25 +30,7 @@
  *
  */
 
-typedef struct flags{
-    pid_t process;
-    char * dump_file_name;
-    int build_heap_tree;
-    size_t heap_tree_height;
-    int verbose;
-}flags;
 
-typedef struct proc_map_heap_info{
-    uint32_t start_address;
-    uint32_t end_address;
-    uint32_t size;
-}proc_map_heap_info;
-
-typedef struct hash_tree_node{
-    uint8_t hash[16];
-    struct hash_tree_node * left;
-    struct hash_tree_node * right;
-}hash_tree_node;
 
 
 /**************************
@@ -88,7 +71,9 @@ static hash_tree_node * generate_hash_tree(uint8_t * heap, size_t chunk_size, si
     MD5_Init(&md5_context);
     MD5_Update(&md5_context, chunk, chunk_size);
     MD5_Final(root->hash, &md5_context);
-    
+    root->chunk_offset = current_offset;
+    root->chunk_size = chunk_size;
+
     free(chunk);
     
     return root;
@@ -409,6 +394,8 @@ int main(int argc, char * argv[]){
         second_chunk = NULL;
         
         
+        int same_tree =  diff_hash_tree(first_hash_tree, second_hash_tree);
+
         //handle verbose hash printing
         if(f.verbose){
             printf("\n%sFIRST%s\n", YELLOW, NO_COLOR);
@@ -418,7 +405,7 @@ int main(int argc, char * argv[]){
             print_hash_tree(second_hash_tree,0);
 
             //diff the hash trees and print the solution
-            if(diff_hash_tree(first_hash_tree, second_hash_tree)!=1){            
+            if(same_tree!=1){            
                 printf("\n%sDIFF%s\n", YELLOW, NO_COLOR);
                 print_hash_tree(second_hash_tree, 0);
             }else{
@@ -428,7 +415,7 @@ int main(int argc, char * argv[]){
         }
 
         //start visualization
-        draw_heap_visualization();
+        draw_heap_visualization(second_hash_tree, heap_info_second.size, f.heap_tree_height);
 
     }        
     
