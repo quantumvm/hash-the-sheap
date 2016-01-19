@@ -32,6 +32,7 @@ typedef struct flags{
     char * dump_file_name;
     int build_heap_tree;
     size_t heap_tree_height;
+    int verbose;
 }flags;
 
 typedef struct proc_map_heap_info{
@@ -270,6 +271,7 @@ static void print_help(){
     puts("  -i int      - Set hash tree height (defaults to 8 if left blank)");
     puts("  -d file     - Take a single snapshot of the heap and dump to a file");
     puts("  -h          - Print help screen");   
+    puts("  -v          - verbose mode (prints hash tree)");   
 }
 
 int main(int argc, char * argv[]){
@@ -283,7 +285,7 @@ int main(int argc, char * argv[]){
     f.heap_tree_height = 8;
 
     int opt;
-    while((opt = getopt(argc, argv, "p:ti:d:h")) != -1){
+    while((opt = getopt(argc, argv, "p:ti:d:hv")) != -1){
         switch(opt){
             case 'p':
                 f.process = (pid_t) atoi(optarg);
@@ -300,6 +302,9 @@ int main(int argc, char * argv[]){
             case 'h':
                 print_help();
                 exit(0);
+                break;
+            case 'v':
+                f.verbose = 1;
                 break;
             default:
                 print_help();
@@ -401,20 +406,23 @@ int main(int argc, char * argv[]){
         free(second_chunk);
         second_chunk = NULL;
         
-        printf("\n%sFIRST%s\n", YELLOW, NO_COLOR);
-        print_hash_tree(first_hash_tree,0);
-        
-        printf("\n%sSECOND%s\n", YELLOW, NO_COLOR);
-        print_hash_tree(second_hash_tree,0);
 
-        //diff the hash trees and print the solution
-        if(diff_hash_tree(first_hash_tree, second_hash_tree)!=1){            
-            //print_hash_tree(first_hash_tree, 0);
-            printf("\n%sTHIRD%s\n", YELLOW, NO_COLOR);
-            print_hash_tree(second_hash_tree, 0);
-        }else{
-            second_hash_tree = NULL;
-            puts("SAME TREE!!!");
+        if(f.verbose){
+            printf("\n%sFIRST%s\n", YELLOW, NO_COLOR);
+            print_hash_tree(first_hash_tree,0);
+            
+            printf("\n%sSECOND%s\n", YELLOW, NO_COLOR);
+            print_hash_tree(second_hash_tree,0);
+
+            //diff the hash trees and print the solution
+            if(diff_hash_tree(first_hash_tree, second_hash_tree)!=1){            
+                //print_hash_tree(first_hash_tree, 0);
+                printf("\n%sDIFF%s\n", YELLOW, NO_COLOR);
+                print_hash_tree(second_hash_tree, 0);
+            }else{
+                second_hash_tree = NULL;
+                puts("SAME TREE!!!");
+            }
         }
     }        
     

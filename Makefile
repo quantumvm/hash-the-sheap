@@ -1,11 +1,11 @@
 CC=gcc
 CFLAGS=-Wall -std=c99
-SOURCES=heapdump.c
+SOURCES=hashthesheap.c
 LIB=-lssl -lcrypto
 
 all:
-	$(CC) $(CFLAGS) $(SOURCES) $(LIB) -o heapdump
+	$(CC) $(CFLAGS) $(SOURCES) $(LIB) -o hashthesheap
 clean:
-	rm heapdump
+	rm hashthesheap
 install:
-	install -m 0755 heapdump /usr/local/bin
+	install -m 0755 hashthesheap /usr/local/bin
